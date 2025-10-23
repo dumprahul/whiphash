@@ -1,0 +1,19 @@
+{
+  "name": "niilion-scripts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.10.0",
+  "type": "module",
+  "dependencies": {
+    "@nillion/nuc": "^0.1.1",
+    "@nillion/secretvaults": "^0.1.7",
+    "dotenv": "^17.2.3"
+  }
+}
