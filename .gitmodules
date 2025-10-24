@@ -1,0 +1,3 @@
+[submodule "pyth-entropy/lib/forge-std"]
+	path = pyth-entropy/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
