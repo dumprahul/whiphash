@@ -424,9 +424,26 @@ export default function TestPage() {
         eventName: 'Requested'
       })
 
+
       if (requestEvents.length > 0) {
         const seqNum = requestEvents[0].args.sequenceNumber.toString()
         setSequenceNumber(seqNum)
+        
+        // Generate password immediately using transaction hash as entropy
+        // This provides immediate feedback while waiting for Pyth to fulfill
+        const txHashBigInt = BigInt(txHash)
+        const immediateRandomnessResult = {
+          n1: (txHashBigInt >> BigInt(128)).toString(), // Use first half of tx hash
+          n2: (txHashBigInt & (BigInt(1) << BigInt(128) - BigInt(1))).toString(), // Use second half of tx hash
+          fulfilled: true, // Mark as fulfilled for immediate generation
+          requester: account
+        }
+        
+        // Generate password immediately with transaction-based entropy
+        console.log('🚀 Generating immediate password with transaction entropy...')
+        generatePassword(immediateRandomnessResult, txHash, seqNum)
+        
+        // Start polling for real Pyth randomness
         startPolling(seqNum)
       } else {
         setError('Could not find sequence number in transaction')
@@ -465,8 +482,8 @@ export default function TestPage() {
           setIsPolling(false)
           clearInterval(pollInterval)
           
-          // Generate password with Pyth randomness
-          console.log('🔐 Generating password with Pyth randomness...')
+          // Regenerate password with real Pyth randomness
+          console.log('🔄 Regenerating password with verified Pyth randomness...')
           generatePassword(randomnessResult)
         }
       } catch (err) {
@@ -475,13 +492,20 @@ export default function TestPage() {
     }, 2000) // Poll every 2 seconds
   }
 
-  const generatePassword = async (randomnessResult: {
-    n1: string
-    n2: string
-    fulfilled: boolean
-    requester: string
-  }) => {
-    if (!txHash || !sequenceNumber) {
+  const generatePassword = async (
+    randomnessResult: {
+      n1: string
+      n2: string
+      fulfilled: boolean
+      requester: string
+    },
+    txHashParam?: string,
+    sequenceNumberParam?: string
+  ) => {
+    const currentTxHash = txHashParam || txHash
+    const currentSequenceNumber = sequenceNumberParam || sequenceNumber
+    
+    if (!currentTxHash || !currentSequenceNumber) {
       console.error('Missing transaction hash or sequence number')
       return
     }
@@ -495,8 +519,8 @@ export default function TestPage() {
       const pythRandomness = {
         n1: randomnessResult.n1,
         n2: randomnessResult.n2,
-        txHash: txHash,
-        sequenceNumber: sequenceNumber
+        txHash: currentTxHash,
+        sequenceNumber: currentSequenceNumber
       }
 
       // Generate password client-side using Web Crypto API
@@ -676,12 +700,15 @@ export default function TestPage() {
           {isGeneratingPassword && (
             <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <h3 className="font-semibold text-yellow-800 mb-2">🔐 Generating Secure Password...</h3>
-              <p className="text-yellow-700">Processing Pyth randomness through cryptographic functions...</p>
+              <p className="text-yellow-700">
+                {result ? 'Updating password with verified Pyth randomness...' : 'Creating initial password with transaction entropy...'}
+              </p>
               <div className="mt-2 text-sm text-black">
                 <p>• Generating device secret</p>
                 <p>• Extracting randomness (R1, R2)</p>
                 <p>• Applying HKDF and scrypt (memory-hard)</p>
                 <p>• Creating final password</p>
+                {result && <p className="text-green-600">• Updating with verified Pyth randomness</p>}
               </div>
             </div>
           )}
