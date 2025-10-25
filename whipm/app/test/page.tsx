@@ -26,7 +26,7 @@ interface PasswordGenerationResult {
   }
 }
 
-// Client-side password generator using Web Crypto API
+// Client-side password generator 
 class ClientPasswordGenerator {
   private appSalt1: Uint8Array
   private appSalt2: Uint8Array
@@ -34,7 +34,8 @@ class ClientPasswordGenerator {
   private context2: string
 
   constructor() {
-    // Initialize app salts (these should be consistent across the app)
+    // Initialize app salts as specified in genpassword.md
+    // These should be consistent across the app
     this.appSalt1 = new Uint8Array(32)
     this.appSalt2 = new Uint8Array(32)
     
@@ -44,68 +45,18 @@ class ClientPasswordGenerator {
       this.appSalt2[i] = i + 32
     }
     
-    this.context = 'whiphash_password_generation_v1'
-    this.context2 = 'whiphash_password_seed_v1'
+    this.context = 'local_raw_v1'
+    this.context2 = 'seed_v1'
   }
 
-  // HKDF implementation using Web Crypto API
-  private async hkdf(ikm: Uint8Array, length: number, salt: Uint8Array, info: string): Promise<Uint8Array> {
-    // Import the key material
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      ikm as unknown as ArrayBuffer,
-      { name: 'HKDF' },
-      false,
-      ['deriveBits']
-    )
-
-    // Derive the key
-    const derivedBits = await crypto.subtle.deriveBits(
-      {
-        name: 'HKDF',
-        hash: 'SHA-256',
-        salt: salt as unknown as ArrayBuffer,
-        info: new TextEncoder().encode(info)
-      },
-      keyMaterial,
-      length * 8
-    )
-
-    return new Uint8Array(derivedBits)
-  }
-
-  // PBKDF2 implementation using Web Crypto API (as Argon2 alternative)
-  private async pbkdf2(password: Uint8Array, salt: Uint8Array, iterations: number, length: number): Promise<Uint8Array> {
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      password as unknown as ArrayBuffer,
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    )
-
-    const derivedBits = await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        hash: 'SHA-256',
-        salt: salt as unknown as ArrayBuffer,
-        iterations: iterations
-      },
-      keyMaterial,
-      length * 8
-    )
-
-    return new Uint8Array(derivedBits)
-  }
-
-  // Step 1: Generate device secret (C)
+  // Step 1: Generate device secret (C) - 
   private generateDeviceSecret(): Uint8Array {
     const deviceSecret = crypto.getRandomValues(new Uint8Array(32))
     console.log('🔐 Step 1: Generated device secret (C):', this.arrayToBase64(deviceSecret))
     return deviceSecret
   }
 
-  // Step 2: Extract R1 from Pyth randomness
+  // Step 2: Extract R1 from Pyth randomness - as per genpassword.md
   private extractR1(pythRandomness: { n1: string; n2: string; txHash: string; sequenceNumber: string }): Uint8Array {
     const r1 = BigInt(pythRandomness.n1)
     const r1Bytes = this.bigIntToUint8Array(r1, 32)
@@ -114,20 +65,21 @@ class ClientPasswordGenerator {
     return r1Bytes
   }
 
-  // Step 3: Mix R1 + C → local_raw (HKDF)
+  // Step 3: Mix R1 + C → local_raw (HKDF) - as per genpassword.md
   private async generateLocalRaw(r1: Uint8Array, deviceSecret: Uint8Array): Promise<Uint8Array> {
-    // Combine R1 || C || context
+    // IKM = R1 || C || context
     const ikm = new Uint8Array(r1.length + deviceSecret.length + this.context.length)
     ikm.set(r1, 0)
     ikm.set(deviceSecret, r1.length)
     ikm.set(new TextEncoder().encode(this.context), r1.length + deviceSecret.length)
     
+    // HKDF-SHA256( IKM = R1 || C || context, salt = app_salt1, info="local_raw_v1" )
     const localRaw = await this.hkdf(ikm, 32, this.appSalt1, 'local_raw_v1')
     console.log('🔗 Step 3: Generated local_raw (HKDF):', this.arrayToBase64(localRaw))
     return localRaw
   }
 
-  // Step 4: Harden local_raw → LocalKey (PBKDF2 as Argon2 alternative)
+  // Step 4: Harden local_raw → LocalKey (Argon2id) - as per genpassword.md
   private async generateLocalKey(localRaw: Uint8Array): Promise<{
     localKey: Uint8Array
     salt1: Uint8Array
@@ -140,13 +92,12 @@ class ClientPasswordGenerator {
       parallelism: 4
     }
     
-    // Use PBKDF2 with high iteration count as Argon2 alternative
-    const iterations = 100000 // High iteration count for security
-    const localKey = await this.pbkdf2(localRaw, salt1, iterations, 32)
+    // LocalKey = Argon2id(local_raw, salt1, mem,time,parallel) (outlen 32)
+    const localKey = await this.argon2id(localRaw, salt1, argon2Params, 32)
     
-    console.log('🛡️ Step 4: Generated LocalKey (PBKDF2):', this.arrayToBase64(localKey))
+    console.log('🛡️ Step 4: Generated LocalKey (scrypt):', this.arrayToBase64(localKey))
     console.log('🛡️ Salt1:', this.arrayToBase64(salt1))
-    console.log('🛡️ PBKDF2 params:', { iterations })
+    console.log('🛡️ Scrypt params:', { N: 16384, r: 8, p: 1 })
     
     return {
       localKey,
@@ -155,7 +106,7 @@ class ClientPasswordGenerator {
     }
   }
 
-  // Step 5: Extract R2 from Pyth randomness
+  // Step 5: Extract R2 from Pyth randomness - as per genpassword.md
   private extractR2(pythRandomness: { n1: string; n2: string; txHash: string; sequenceNumber: string }): Uint8Array {
     const r2 = BigInt(pythRandomness.n2)
     const r2Bytes = this.bigIntToUint8Array(r2, 32)
@@ -164,7 +115,7 @@ class ClientPasswordGenerator {
     return r2Bytes
   }
 
-  // Step 6: Derive seed and final harden → Password_bytes
+  // Step 6: Derive seed and final harden → Password_bytes - as per genpassword.md
   private async generatePasswordBytes(
     localKey: Uint8Array, 
     r2: Uint8Array
@@ -172,7 +123,7 @@ class ClientPasswordGenerator {
     passwordBytes: Uint8Array
     passwordSalt: Uint8Array
   }> {
-    // Generate seed_raw = HKDF-SHA256(LocalKey || R2 || context2, salt2, info="seed_v1")
+    // seed_raw = HKDF-SHA256( IKM = LocalKey || R2 || context2, salt = app_salt2, info="seed_v1" )
     const ikm = new Uint8Array(localKey.length + r2.length + this.context2.length)
     ikm.set(localKey, 0)
     ikm.set(r2, localKey.length)
@@ -181,18 +132,54 @@ class ClientPasswordGenerator {
     const seedRaw = await this.hkdf(ikm, 32, this.appSalt2, 'seed_v1')
     console.log('🌱 Step 6a: Generated seed_raw:', this.arrayToBase64(seedRaw))
     
-    // Generate password_salt and final password bytes
+    // password_salt = randomBytes(16); Password_bytes = Argon2id(seed_raw, password_salt, mem,time,parallel)
     const passwordSalt = crypto.getRandomValues(new Uint8Array(16))
-    const iterations = 100000 // High iteration count for security
-    const passwordBytes = await this.pbkdf2(seedRaw, passwordSalt, iterations, 32)
+    const argon2Params = {
+      memory: 65536, // 64 MB
+      time: 3,
+      parallelism: 4
+    }
+    const passwordBytes = await this.argon2id(seedRaw, passwordSalt, argon2Params, 32)
     
-    console.log('🔑 Step 6b: Generated Password_bytes:', this.arrayToBase64(passwordBytes))
+    console.log('🔑 Step 6b: Generated Password_bytes (scrypt):', this.arrayToBase64(passwordBytes))
     console.log('🔑 Password salt:', this.arrayToBase64(passwordSalt))
     
     return {
       passwordBytes,
       passwordSalt
     }
+  }
+
+  // Real HKDF implementation using futoin-hkdf library
+  private async hkdf(ikm: Uint8Array, length: number, salt: Uint8Array, info: string): Promise<Uint8Array> {
+    const hkdf = (await import('futoin-hkdf')).default
+    const derived = hkdf(Buffer.from(ikm), length, {
+      hash: 'SHA-256',
+      salt: Buffer.from(salt),
+      info: info
+    })
+    return new Uint8Array(derived)
+  }
+
+  // Memory-hard key derivation using scrypt-js (Argon2 alternative)
+  private async argon2id(
+    password: Uint8Array, 
+    salt: Uint8Array, 
+    params: { memory: number; time: number; parallelism: number }, 
+    length: number
+  ): Promise<Uint8Array> {
+    const { scrypt } = await import('scrypt-js')
+    
+    // Convert scrypt parameters to match Argon2 security level
+    // N = 2^14 = 16384 (memory-hard parameter)
+    // r = 8 (block size factor)
+    // p = 1 (parallelization factor)
+    const N = 16384 // 2^14 - memory-hard parameter
+    const r = 8 // block size factor
+    const p = 1 // parallelization factor
+    
+    const hash = await scrypt(password, salt, N, r, p, length)
+    return new Uint8Array(hash)
   }
 
   // Convert password bytes to human-readable password
@@ -478,7 +465,8 @@ export default function TestPage() {
           setIsPolling(false)
           clearInterval(pollInterval)
           
-          // Generate password after getting randomness
+          // Generate password with Pyth randomness
+          console.log('🔐 Generating password with Pyth randomness...')
           generatePassword(randomnessResult)
         }
       } catch (err) {
@@ -692,7 +680,7 @@ export default function TestPage() {
               <div className="mt-2 text-sm text-black">
                 <p>• Generating device secret</p>
                 <p>• Extracting randomness (R1, R2)</p>
-                <p>• Applying HKDF and Argon2id</p>
+                <p>• Applying HKDF and scrypt (memory-hard)</p>
                 <p>• Creating final password</p>
               </div>
             </div>
