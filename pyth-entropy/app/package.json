@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "randomness": "node randomness-script.js",
+    "coinflip": "node script.js"
   },
   "keywords": [],
   "author": "",
@@ -11,6 +13,7 @@
   "description": "",
   "dependencies": {
     "@pythnetwork/entropy-sdk-solidity": "^2.1.0",
+    "dotenv": "^17.2.3",
     "web3": "^4.16.0"
   }
 }
