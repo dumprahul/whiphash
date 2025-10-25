@@ -26,6 +26,269 @@ interface PasswordGenerationResult {
   }
 }
 
+// Client-side password generator using Web Crypto API
+class ClientPasswordGenerator {
+  private appSalt1: Uint8Array
+  private appSalt2: Uint8Array
+  private context: string
+  private context2: string
+
+  constructor() {
+    // Initialize app salts (these should be consistent across the app)
+    this.appSalt1 = new Uint8Array(32)
+    this.appSalt2 = new Uint8Array(32)
+    
+    // Fill with deterministic values (in production, these should be app-specific constants)
+    for (let i = 0; i < 32; i++) {
+      this.appSalt1[i] = i
+      this.appSalt2[i] = i + 32
+    }
+    
+    this.context = 'whiphash_password_generation_v1'
+    this.context2 = 'whiphash_password_seed_v1'
+  }
+
+  // HKDF implementation using Web Crypto API
+  private async hkdf(ikm: Uint8Array, length: number, salt: Uint8Array, info: string): Promise<Uint8Array> {
+    // Import the key material
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      ikm as unknown as ArrayBuffer,
+      { name: 'HKDF' },
+      false,
+      ['deriveBits']
+    )
+
+    // Derive the key
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: 'HKDF',
+        hash: 'SHA-256',
+        salt: salt as unknown as ArrayBuffer,
+        info: new TextEncoder().encode(info)
+      },
+      keyMaterial,
+      length * 8
+    )
+
+    return new Uint8Array(derivedBits)
+  }
+
+  // PBKDF2 implementation using Web Crypto API (as Argon2 alternative)
+  private async pbkdf2(password: Uint8Array, salt: Uint8Array, iterations: number, length: number): Promise<Uint8Array> {
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      password as unknown as ArrayBuffer,
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits']
+    )
+
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        hash: 'SHA-256',
+        salt: salt as unknown as ArrayBuffer,
+        iterations: iterations
+      },
+      keyMaterial,
+      length * 8
+    )
+
+    return new Uint8Array(derivedBits)
+  }
+
+  // Step 1: Generate device secret (C)
+  private generateDeviceSecret(): Uint8Array {
+    const deviceSecret = crypto.getRandomValues(new Uint8Array(32))
+    console.log('🔐 Step 1: Generated device secret (C):', this.arrayToBase64(deviceSecret))
+    return deviceSecret
+  }
+
+  // Step 2: Extract R1 from Pyth randomness
+  private extractR1(pythRandomness: { n1: string; n2: string; txHash: string; sequenceNumber: string }): Uint8Array {
+    const r1 = BigInt(pythRandomness.n1)
+    const r1Bytes = this.bigIntToUint8Array(r1, 32)
+    console.log('🎲 Step 2: Extracted R1 from Pyth:', pythRandomness.n1)
+    console.log('🎲 R1 bytes:', this.arrayToBase64(r1Bytes))
+    return r1Bytes
+  }
+
+  // Step 3: Mix R1 + C → local_raw (HKDF)
+  private async generateLocalRaw(r1: Uint8Array, deviceSecret: Uint8Array): Promise<Uint8Array> {
+    // Combine R1 || C || context
+    const ikm = new Uint8Array(r1.length + deviceSecret.length + this.context.length)
+    ikm.set(r1, 0)
+    ikm.set(deviceSecret, r1.length)
+    ikm.set(new TextEncoder().encode(this.context), r1.length + deviceSecret.length)
+    
+    const localRaw = await this.hkdf(ikm, 32, this.appSalt1, 'local_raw_v1')
+    console.log('🔗 Step 3: Generated local_raw (HKDF):', this.arrayToBase64(localRaw))
+    return localRaw
+  }
+
+  // Step 4: Harden local_raw → LocalKey (PBKDF2 as Argon2 alternative)
+  private async generateLocalKey(localRaw: Uint8Array): Promise<{
+    localKey: Uint8Array
+    salt1: Uint8Array
+    argon2Params: { memory: number; time: number; parallelism: number }
+  }> {
+    const salt1 = crypto.getRandomValues(new Uint8Array(16))
+    const argon2Params = {
+      memory: 65536, // 64 MB
+      time: 3,
+      parallelism: 4
+    }
+    
+    // Use PBKDF2 with high iteration count as Argon2 alternative
+    const iterations = 100000 // High iteration count for security
+    const localKey = await this.pbkdf2(localRaw, salt1, iterations, 32)
+    
+    console.log('🛡️ Step 4: Generated LocalKey (PBKDF2):', this.arrayToBase64(localKey))
+    console.log('🛡️ Salt1:', this.arrayToBase64(salt1))
+    console.log('🛡️ PBKDF2 params:', { iterations })
+    
+    return {
+      localKey,
+      salt1,
+      argon2Params
+    }
+  }
+
+  // Step 5: Extract R2 from Pyth randomness
+  private extractR2(pythRandomness: { n1: string; n2: string; txHash: string; sequenceNumber: string }): Uint8Array {
+    const r2 = BigInt(pythRandomness.n2)
+    const r2Bytes = this.bigIntToUint8Array(r2, 32)
+    console.log('🎲 Step 5: Extracted R2 from Pyth:', pythRandomness.n2)
+    console.log('🎲 R2 bytes:', this.arrayToBase64(r2Bytes))
+    return r2Bytes
+  }
+
+  // Step 6: Derive seed and final harden → Password_bytes
+  private async generatePasswordBytes(
+    localKey: Uint8Array, 
+    r2: Uint8Array
+  ): Promise<{
+    passwordBytes: Uint8Array
+    passwordSalt: Uint8Array
+  }> {
+    // Generate seed_raw = HKDF-SHA256(LocalKey || R2 || context2, salt2, info="seed_v1")
+    const ikm = new Uint8Array(localKey.length + r2.length + this.context2.length)
+    ikm.set(localKey, 0)
+    ikm.set(r2, localKey.length)
+    ikm.set(new TextEncoder().encode(this.context2), localKey.length + r2.length)
+    
+    const seedRaw = await this.hkdf(ikm, 32, this.appSalt2, 'seed_v1')
+    console.log('🌱 Step 6a: Generated seed_raw:', this.arrayToBase64(seedRaw))
+    
+    // Generate password_salt and final password bytes
+    const passwordSalt = crypto.getRandomValues(new Uint8Array(16))
+    const iterations = 100000 // High iteration count for security
+    const passwordBytes = await this.pbkdf2(seedRaw, passwordSalt, iterations, 32)
+    
+    console.log('🔑 Step 6b: Generated Password_bytes:', this.arrayToBase64(passwordBytes))
+    console.log('🔑 Password salt:', this.arrayToBase64(passwordSalt))
+    
+    return {
+      passwordBytes,
+      passwordSalt
+    }
+  }
+
+  // Convert password bytes to human-readable password
+  private convertToPassword(passwordBytes: Uint8Array): string {
+    // Use a character set that includes letters, numbers, and symbols
+    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?'
+    
+    let password = ''
+    for (let i = 0; i < passwordBytes.length; i++) {
+      const index = passwordBytes[i] % charset.length
+      password += charset[index]
+    }
+    
+    // Ensure minimum length of 16 characters
+    while (password.length < 16) {
+      const extraIndex = passwordBytes[password.length % passwordBytes.length] % charset.length
+      password += charset[extraIndex]
+    }
+    
+    console.log('🎯 Final password generated:', password)
+    return password
+  }
+
+  // Convert BigInt to Uint8Array
+  private bigIntToUint8Array(bigInt: bigint, length: number): Uint8Array {
+    const hex = bigInt.toString(16).padStart(length * 2, '0')
+    const bytes = new Uint8Array(length)
+    for (let i = 0; i < length; i++) {
+      bytes[i] = parseInt(hex.substr(i * 2, 2), 16)
+    }
+    return bytes
+  }
+
+  // Convert Uint8Array to base64
+  private arrayToBase64(array: Uint8Array): string {
+    return btoa(String.fromCharCode(...array))
+  }
+
+  // Main password generation function
+  async generatePassword(pythRandomness: { n1: string; n2: string; txHash: string; sequenceNumber: string }): Promise<PasswordGenerationResult> {
+    console.log('🚀 Starting password generation process...')
+    console.log('📊 Pyth randomness:', pythRandomness)
+    
+    // Step 1: Generate device secret (C)
+    const deviceSecret = this.generateDeviceSecret()
+    
+    // Step 2: Extract R1 from Pyth randomness
+    const r1 = this.extractR1(pythRandomness)
+    
+    // Step 3: Mix R1 + C → local_raw (HKDF)
+    const localRaw = await this.generateLocalRaw(r1, deviceSecret)
+    
+    // Step 4: Harden local_raw → LocalKey (PBKDF2)
+    const { localKey, salt1, argon2Params } = await this.generateLocalKey(localRaw)
+    
+    // Step 5: Extract R2 from Pyth randomness
+    const r2 = this.extractR2(pythRandomness)
+    
+    // Step 6: Derive seed and final harden → Password_bytes
+    const { passwordBytes, passwordSalt } = await this.generatePasswordBytes(localKey, r2)
+    
+    // Convert to human-readable password
+    const password = this.convertToPassword(passwordBytes)
+    
+    const result: PasswordGenerationResult = {
+      password,
+      metadata: {
+        txHash: pythRandomness.txHash,
+        sequenceNumber: pythRandomness.sequenceNumber,
+        deviceSecret: this.arrayToBase64(deviceSecret),
+        r1: pythRandomness.n1,
+        r2: pythRandomness.n2,
+        localRaw: this.arrayToBase64(localRaw),
+        localKey: this.arrayToBase64(localKey),
+        seedRaw: this.arrayToBase64(await this.generateSeedRaw(localKey, r2)),
+        passwordBytes: this.arrayToBase64(passwordBytes),
+        salt1: this.arrayToBase64(salt1),
+        passwordSalt: this.arrayToBase64(passwordSalt),
+        argon2Params
+      }
+    }
+    
+    console.log('✅ Password generation completed!')
+    return result
+  }
+
+  // Helper method to generate seed_raw for metadata
+  private async generateSeedRaw(localKey: Uint8Array, r2: Uint8Array): Promise<Uint8Array> {
+    const ikm = new Uint8Array(localKey.length + r2.length + this.context2.length)
+    ikm.set(localKey, 0)
+    ikm.set(r2, localKey.length)
+    ikm.set(new TextEncoder().encode(this.context2), localKey.length + r2.length)
+    return await this.hkdf(ikm, 32, this.appSalt2, 'seed_v1')
+  }
+}
+
 // Type for window.ethereum
 interface EthereumProvider {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
@@ -64,6 +327,7 @@ export default function TestPage() {
   const [publicClient, setPublicClient] = useState<any>(null)
   const [passwordResult, setPasswordResult] = useState<PasswordGenerationResult | null>(null)
   const [isGeneratingPassword, setIsGeneratingPassword] = useState(false)
+  const [passwordGenerator] = useState(() => new ClientPasswordGenerator())
 
   // Initialize Viem client
   useEffect(() => {
@@ -238,7 +502,7 @@ export default function TestPage() {
     setPasswordResult(null)
 
     try {
-      console.log('🔐 Starting password generation with Pyth randomness...')
+      console.log('🔐 Starting client-side password generation with Pyth randomness...')
       
       const pythRandomness = {
         n1: randomnessResult.n1,
@@ -247,23 +511,11 @@ export default function TestPage() {
         sequenceNumber: sequenceNumber
       }
 
-      // Call the API route for password generation
-      const response = await fetch('/api/generate-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(pythRandomness)
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to generate password')
-      }
-
-      const passwordResult = await response.json()
+      // Generate password client-side using Web Crypto API
+      const passwordResult = await passwordGenerator.generatePassword(pythRandomness)
       setPasswordResult(passwordResult)
       
-      console.log('✅ Password generation completed!')
+      console.log('✅ Client-side password generation completed!')
     } catch (err) {
       console.error('Error generating password:', err)
       setError('Failed to generate password')
