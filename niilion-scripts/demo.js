@@ -89,7 +89,7 @@ async function main() {
     }
 
     // Step 5: Define your owned collection
-    const collectionId = randomUUID();
+    const collectionId = '48fb09ba-cf33-4576-a0f8-9e00d39e9aec';
 
     const collection = {
     _id: collectionId,
@@ -164,12 +164,12 @@ async function main() {
     // %allot indicates that the client should encrypt this data
     const userPrivateData = {
     _id: randomUUID(),
-    name: 'Steph',
+    name: 'Rahul Shanmugam S',
     email: {
-    '%allot': 'steph@example.com',
+    '%allot': 'rahulhacks@example.com',
     },
     phone: {
-    '%allot': '+1-555-0123',
+    '%allot': '232342342342',
     },
     };
 

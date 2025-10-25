@@ -9,8 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@nillion/nuc": "^0.1.1",
+    "@nillion/secretvaults": "^0.1.7",
     "@privy-io/react-auth": "^3.4.1",
     "base64url": "^3.0.1",
+    "dotenv": "^17.2.3",
     "ethers": "^6.15.0",
     "fs": "^0.0.1-security",
     "futoin-hkdf": "^1.5.3",
