@@ -7,5 +7,9 @@
     "default_popup": "popup.html",
     "default_title": "Open WhipHash"
   },
-  "permissions": ["tabs"]
+  "permissions": ["tabs", "activeTab"],
+  "host_permissions": ["http://localhost:*", "http://127.0.0.1:*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src http://localhost:* http://127.0.0.1:*;"
+  }
 }

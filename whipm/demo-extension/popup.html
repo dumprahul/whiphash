@@ -115,6 +115,7 @@
     <div class="controls">
       <button id="refreshBtn" class="control-btn">🔄</button>
       <button id="fullscreenBtn" class="control-btn">⛶</button>
+      <button id="walletBtn" class="control-btn">🔗</button>
     </div>
   </div>
 
@@ -130,7 +131,15 @@
       <button onclick="location.reload()">Retry</button>
     </div>
 
-    <iframe id="whiphashFrame" class="iframe" src="about:blank" style="display: none;"></iframe>
+    <div id="wallet-warning" class="error" style="display: none; background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); color: #ffc107;">
+      <div>⚠️ Wallet Access Limited</div>
+      <div style="font-size: 12px; margin: 10px 0;">For full wallet functionality, click the 🔗 button</div>
+      <button onclick="document.getElementById('walletBtn').click()" style="background: rgba(255, 193, 7, 0.2); border-color: rgba(255, 193, 7, 0.5);">Open Wallet Mode</button>
+    </div>
+
+    <iframe id="whiphashFrame" class="iframe" src="about:blank" style="display: none;" 
+            allow="ethereum; web3; clipboard-write; clipboard-read"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
   </div>
 
   <script src="popup.js"></script>
