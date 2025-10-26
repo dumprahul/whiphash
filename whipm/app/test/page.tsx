@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import { createPublicClient, http, parseAbi, parseEventLogs } from 'viem'
 import { baseSepolia } from 'viem/chains'
+import Dither from '../../components/Dither'
+import { ShimmerButton } from '../../components/ui/shimmer-button'
 
 interface PasswordGenerationResult {
   password: string
@@ -378,6 +380,7 @@ export default function TestPage() {
   const [fee, setFee] = useState<string>('0')
   const [isRequesting, setIsRequesting] = useState(false)
   const [sequenceNumber, setSequenceNumber] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [result, setResult] = useState<{
     n1: string
     n2: string
@@ -851,329 +854,159 @@ export default function TestPage() {
   }
 
 
-  const formatNumber = (num: string, format: string) => {
-    const bigNum = BigInt(num)
-    
-    switch (format) {
-      case 'hex':
-        return '0x' + bigNum.toString(16)
-      case 'percentage':
-        return (bigNum % BigInt(101)).toString() + '%'
-      case 'range100':
-        return ((bigNum % BigInt(100)) + BigInt(1)).toString()
-      case 'decimal':
-        return (Number(bigNum % BigInt(1000000)) / 1000000).toFixed(6)
-      default:
-        return num
-    }
-  }
 
   if (!publicClient) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-black">Loading...</p>
+      <div className="min-h-screen relative overflow-hidden bg-black">
+        {/* Dither Background */}
+        <div style={{ width: '100%', height: '100vh', position: 'absolute', top: 0, left: 0 }}>
+          <Dither
+            waveColor={[0.5, 0.5, 0.5]}
+            disableAnimation={false}
+            enableMouseInteraction={true}
+            mouseRadius={0.3}
+            colorNum={4}
+            waveAmplitude={0.3}
+            waveFrequency={3}
+            waveSpeed={0.05}
+          />
+        </div>
+
+        {/* Dark Overlay */}
+        <div className="absolute inset-0 bg-black/40" />
+
+        {/* Loading Content */}
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <p className="text-white text-xl">Loading...</p>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <h1 className="text-3xl font-bold mb-6 text-center text-black">🎲 Randomness Test</h1>
-          
-          {/* Contract Info */}
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-            <h2 className="text-lg font-semibold mb-2 text-black">Contract Information</h2>
-            <p className="text-sm text-black">
-              <strong>Randomness Contract:</strong> {RANDOMNESS_CONTRACT}
-            </p>
-            <p className="text-sm text-black">
-              <strong>Entropy Provider:</strong> {ENTROPY_CONTRACT}
-            </p>
-            <p className="text-sm text-black">
-              <strong>Fee (wei):</strong> {fee}
-            </p>
-            <p className="text-xs text-gray-600 mt-2">
-              Real contract interaction using Viem library
-            </p>
-          </div>
+    <div className="min-h-screen relative overflow-hidden bg-black">
+      {/* Dither Background */}
+      <div style={{ width: '100%', height: '100vh', position: 'absolute', top: 0, left: 0 }}>
+        <Dither
+          waveColor={[0.5, 0.5, 0.5]}
+          disableAnimation={false}
+          enableMouseInteraction={true}
+          mouseRadius={0.3}
+          colorNum={4}
+          waveAmplitude={0.3}
+          waveFrequency={3}
+          waveSpeed={0.05}
+        />
+      </div>
 
+      {/* Dark Overlay */}
+      <div className="absolute inset-0 bg-black/40" />
 
-          {/* Wallet Connection */}
-          {!account && (
-            <div className="mb-6">
-              <button
+      {/* Main Content */}
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4">
+        <div className="text-center">
+          {/* Title */}
+          <h1 className="text-6xl md:text-7xl lg:text-8xl font-black mb-12 text-white drop-shadow-2xl tracking-tight">
+            whiphash.
+          </h1>
+
+          {/* Main Button */}
+          <div className="flex justify-center">
+            {!account ? (
+              <ShimmerButton
+                shimmerColor="#ffffff"
+                shimmerSize="0.05em"
+                shimmerDuration="3s"
+                borderRadius="12px"
+                background="rgba(255, 255, 255, 0.1)"
+                className="px-8 py-4 text-xl font-bold"
                 onClick={connectWallet}
-                className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
               >
                 Connect Wallet
-              </button>
-            </div>
-          )}
-
-          {/* Request Section */}
-          {account && (
-            <div className="mb-6">
-              <button
+              </ShimmerButton>
+            ) : (
+              <ShimmerButton
+                shimmerColor="#ffffff"
+                shimmerSize="0.05em"
+                shimmerDuration="3s"
+                borderRadius="12px"
+                background="rgba(255, 255, 255, 0.1)"
+                className="px-8 py-4 text-xl font-bold"
                 onClick={requestRandomness}
                 disabled={isRequesting || isPolling || isGeneratingPassword || isStoringPassword}
-                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {isRequesting ? 'Requesting Randomness...' : 
                  isPolling ? 'Waiting for Randomness...' : 
                  isGeneratingPassword ? 'Generating Password...' : 
                  isStoringPassword ? 'Storing in NilDB...' :
                  'Generate Secure Password'}
-              </button>
-            </div>
-          )}
+              </ShimmerButton>
+            )}
+          </div>
 
-          {/* Error Display */}
+          {/* Status Messages */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-600">{error}</p>
+            <div className="mt-8 p-4 bg-red-500/20 border border-red-500/30 rounded-lg backdrop-blur-sm">
+              <p className="text-red-200">{error}</p>
             </div>
           )}
 
-          {/* Transaction Hash */}
-          {txHash && (
-            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <h3 className="font-semibold text-yellow-800">Transaction Submitted</h3>
-              <p className="text-yellow-700">Transaction Hash: {txHash}</p>
-              {sequenceNumber && (
-                <p className="text-yellow-700">Sequence Number: {sequenceNumber}</p>
-              )}
-              <p className="text-sm text-yellow-600">Waiting for Pyth Network to fulfill randomness...</p>
-            </div>
-          )}
-
-          {/* Randomness Results */}
-          {result && (
-            <div className="space-y-6">
-              <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
-                <h3 className="text-xl font-semibold text-green-800 mb-4">🎲 Pyth Randomness Generated!</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Raw Numbers */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Raw Numbers</h4>
-                    <div className="space-y-2">
-                      <p className="text-sm text-black"><strong>n1:</strong> {result.n1}</p>
-                      <p className="text-sm text-black"><strong>n2:</strong> {result.n2}</p>
-                    </div>
-                  </div>
-
-                  {/* Hexadecimal */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Hexadecimal</h4>
-                    <div className="space-y-2">
-                      <p className="text-sm font-mono text-black"><strong>n1:</strong> {formatNumber(result.n1, 'hex')}</p>
-                      <p className="text-sm font-mono text-black"><strong>n2:</strong> {formatNumber(result.n2, 'hex')}</p>
-                    </div>
-                  </div>
-
-                  {/* Percentage */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Percentage (0-100)</h4>
-                    <div className="space-y-2">
-                      <p className="text-sm text-black"><strong>n1:</strong> {formatNumber(result.n1, 'percentage')}</p>
-                      <p className="text-sm text-black"><strong>n2:</strong> {formatNumber(result.n2, 'percentage')}</p>
-                    </div>
-                  </div>
-
-                  {/* Range 1-100 */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Range (1-100)</h4>
-                    <div className="space-y-2">
-                      <p className="text-sm text-black"><strong>n1:</strong> {formatNumber(result.n1, 'range100')}</p>
-                      <p className="text-sm text-black"><strong>n2:</strong> {formatNumber(result.n2, 'range100')}</p>
-                    </div>
-                  </div>
-
-                  {/* Decimal */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Decimal (0-1)</h4>
-                    <div className="space-y-2">
-                      <p className="text-sm text-black"><strong>n1:</strong> {formatNumber(result.n1, 'decimal')}</p>
-                      <p className="text-sm text-black"><strong>n2:</strong> {formatNumber(result.n2, 'decimal')}</p>
-                    </div>
-                  </div>
-
-                  {/* Requester */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Requester</h4>
-                    <p className="text-sm font-mono text-black">{result.requester}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Password Generation Status */}
-          {isGeneratingPassword && (
-            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <h3 className="font-semibold text-yellow-800 mb-2">🔐 Generating Secure Password...</h3>
-              <p className="text-yellow-700">
-                {result ? 'Updating password with verified Pyth randomness...' : 'Creating initial password with transaction entropy...'}
-              </p>
-              <div className="mt-2 text-sm text-black">
-                <p>• Generating device secret</p>
-                <p>• Extracting randomness (R1, R2)</p>
-                <p>• Applying HKDF and scrypt (memory-hard)</p>
-                <p>• Creating final password</p>
-                {result && <p className="text-green-600">• Updating with verified Pyth randomness</p>}
-              </div>
-            </div>
-          )}
-
-          {/* NilDB Storage Status */}
-          {isStoringPassword && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-semibold text-blue-800 mb-2">💾 Storing in NilDB...</h3>
-              <p className="text-blue-700">Securely storing password in decentralized database...</p>
-              <div className="mt-2 text-sm text-black">
-                <p>• Encrypting password with secret sharing</p>
-                <p>• Distributing across multiple nodes</p>
-                <p>• Setting up access controls</p>
-                <p>• Storing metadata and verification data</p>
-              </div>
-            </div>
-          )}
-
-          {/* NilDB Storage Success */}
-          {storageSuccess && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h3 className="font-semibold text-green-800 mb-2">✅ Password Stored Successfully!</h3>
-              <p className="text-green-700">Your password has been securely stored in NilDB with the following features:</p>
-              <div className="mt-2 text-sm text-black">
-                <p>• 🔐 Secret shared across multiple nodes</p>
-                <p>• 🛡️ Encrypted with your private key</p>
-                <p>• 📊 Metadata includes Pyth randomness verification</p>
-                <p>• 🌐 Decentralized storage - no single point of failure</p>
-              </div>
-            </div>
-          )}
-
-          {/* Password Results */}
           {passwordResult && (
-            <div className="space-y-6">
-              <div className="p-6 bg-purple-50 border border-purple-200 rounded-lg">
-                <h3 className="text-xl font-semibold text-purple-800 mb-4">🔐 Secure Password Generated!</h3>
-                
-                {/* Generated Password */}
-                <div className="mb-6">
-                  <h4 className="font-semibold text-black mb-2">Generated Password</h4>
-                  <div className="bg-gray-100 p-3 rounded border">
-                    <code className="text-lg font-mono break-all text-black">{passwordResult.password}</code>
-                  </div>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(passwordResult.password)}
-                    className="mt-2 px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
-                  >
-                    Copy Password
-                  </button>
+            <div className="mt-8 space-y-4">
+              {/* Password Display */}
+              <div className="p-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg">
+                <h3 className="text-xl font-semibold text-white mb-4">🔐 Secure Password Generated!</h3>
+                <div className="bg-black/20 p-3 rounded border border-white/10">
+                  <code className="text-lg font-mono break-all text-white">{passwordResult.password}</code>
                 </div>
-
-                {/* Socials Input */}
-                {showSocialsInput && (
-                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 className="font-semibold text-blue-800 mb-3">📝 Enter Socials Information</h4>
-                    <p className="text-blue-700 mb-3">Please enter socials information to store with your password in NilDB:</p>
-                    <textarea
-                      value={socials}
-                      onChange={(e) => setSocials(e.target.value)}
-                      placeholder="Enter socials information (e.g., website, platform, account details, etc.)"
-                      className="w-full p-3 border border-gray-300 rounded-lg mb-3 text-black"
-                      rows={3}
-                    />
-                    <div className="flex gap-3">
-                      <button
-                        onClick={storePasswordWithSocials}
-                        disabled={isStoringPassword || !socials.trim()}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                      >
-                        {isStoringPassword ? 'Storing...' : 'Store Password & Socials'}
-                      </button>
-                      <button
-                        onClick={() => setShowSocialsInput(false)}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-                      >
-                        Skip Storage
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Cryptographic Metadata */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Transaction Info</h4>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-black"><strong>TX Hash:</strong> <code className="font-mono text-black">{passwordResult.metadata.txHash}</code></p>
-                      <p className="text-black"><strong>Sequence:</strong> <code className="font-mono text-black">{passwordResult.metadata.sequenceNumber}</code></p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Pyth Randomness</h4>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-black"><strong>R1:</strong> <code className="font-mono text-black">{passwordResult.metadata.r1}</code></p>
-                      <p className="text-black"><strong>R2:</strong> <code className="font-mono text-black">{passwordResult.metadata.r2}</code></p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Device Secret</h4>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-black"><strong>C:</strong> <code className="font-mono text-xs break-all text-black">{passwordResult.metadata.deviceSecret}</code></p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Local Processing</h4>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-black"><strong>local_raw:</strong> <code className="font-mono text-xs break-all text-black">{passwordResult.metadata.localRaw}</code></p>
-                      <p className="text-black"><strong>LocalKey:</strong> <code className="font-mono text-xs break-all text-black">{passwordResult.metadata.localKey}</code></p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Final Processing</h4>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-black"><strong>seed_raw:</strong> <code className="font-mono text-xs break-all text-black">{passwordResult.metadata.seedRaw}</code></p>
-                      <p className="text-black"><strong>Password bytes:</strong> <code className="font-mono text-xs break-all text-black">{passwordResult.metadata.passwordBytes}</code></p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-black mb-2">Argon2 Parameters</h4>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-black"><strong>Memory:</strong> {passwordResult.metadata.argon2Params.memory} bytes</p>
-                      <p className="text-black"><strong>Time:</strong> {passwordResult.metadata.argon2Params.time}</p>
-                      <p className="text-black"><strong>Parallelism:</strong> {passwordResult.metadata.argon2Params.parallelism}</p>
-                      <p className="text-black"><strong>Salt1:</strong> <code className="font-mono text-xs break-all text-black">{passwordResult.metadata.salt1}</code></p>
-                      <p className="text-black"><strong>Password Salt:</strong> <code className="font-mono text-xs break-all text-black">{passwordResult.metadata.passwordSalt}</code></p>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(passwordResult.password)}
+                  className="mt-3 px-4 py-2 bg-white/20 text-white text-sm rounded hover:bg-white/30 backdrop-blur-sm"
+                >
+                  Copy Password
+                </button>
               </div>
-            </div>
-          )}
 
-          {/* Wallet Info */}
-          {account && (
-            <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-              <h3 className="font-semibold text-black mb-2">Connected Wallet</h3>
-              <p className="text-sm text-black">
-                <strong>Address:</strong> {account}
-              </p>
-              <p className="text-sm text-black">
-                <strong>Chain:</strong> Base Sepolia (84532)
-              </p>
+              {/* Socials Input */}
+              {showSocialsInput && (
+                <div className="p-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg">
+                  <h4 className="font-semibold text-white mb-3">📝 Enter Socials Information</h4>
+                  <p className="text-white/80 mb-3">Please enter socials information to store with your password in NilDB:</p>
+                  <textarea
+                    value={socials}
+                    onChange={(e) => setSocials(e.target.value)}
+                    placeholder="Enter socials information (e.g., website, platform, account details, etc.)"
+                    className="w-full p-3 border border-white/30 rounded-lg mb-3 text-black bg-white/90"
+                    rows={3}
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      onClick={storePasswordWithSocials}
+                      disabled={isStoringPassword || !socials.trim()}
+                      className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm"
+                    >
+                      {isStoringPassword ? 'Storing...' : 'Store Password & Socials'}
+                    </button>
+                    <button
+                      onClick={() => setShowSocialsInput(false)}
+                      className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 backdrop-blur-sm"
+                    >
+                      Skip Storage
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Success Message */}
+              {storageSuccess && (
+                <div className="p-6 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-lg">
+                  <h3 className="font-semibold text-green-200 mb-2">✅ Password Stored Successfully!</h3>
+                  <p className="text-green-200">Your password has been securely stored in NilDB.</p>
+                </div>
+              )}
             </div>
           )}
         </div>
