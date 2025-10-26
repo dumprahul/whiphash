@@ -4,6 +4,18 @@
 
 A decentralized password generator that creates cryptographically secure passwords using high-entropy randomness from the Pyth Network, combined with advanced client-side encryption and secure storage in NilDB.
 
+/nillion-scripts and /pyth-entropy folders are testfolders which is tested by me for building project during hack. Ignore that. 
+
+/whipm is main project folder
+
+## 🔗 Contract Explorer & Transaction Details
+
+**📊 Transaction Explorer**: [View on BaseScan](https://sepolia.basescan.org/address/0xE861DC68Eb976da0661035bBf132d6F3a3288B71)
+
+**💰 Pyth Network Fee**: **0.00000015 ETH** (constant throughout the project)
+- **Cost Efficiency**: Ultra-low fees for high-entropy randomness
+
+
 ---
 
 ## 📋 Deployed Contracts
