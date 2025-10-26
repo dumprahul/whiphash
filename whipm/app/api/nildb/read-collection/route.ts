@@ -52,7 +52,7 @@ export async function GET() {
     await builder.refreshRootToken();
     console.log('✅ Authentication refreshed');
 
-    // Read all records from the collection
+    // First, get all document references from the collection
     const response = await builder.findData({
       collection: NILLION_COLLECTION_ID,
       filter: {}, // Empty filter returns all records
@@ -60,13 +60,38 @@ export async function GET() {
 
     console.log(`✅ Found ${response.data.length} records in collection`);
 
-    // Transform the data to be more frontend-friendly
-    const transformedData = response.data.map((item: any) => {
-      // Extract password from phone field (secret shared)
-      const password = item.phone?.['%share'] || '[Encrypted - Cannot decrypt]';
-      
-      // Extract socials from email field (secret shared)
-      const socials = item.email?.['%share'] || '[Encrypted - Cannot decrypt]';
+    // Transform the data - check if builder's read permissions allow decryption
+    const transformedData = response.data.map((item: Record<string, unknown>) => {
+      console.log(`🔍 Processing item:`, {
+        id: item._id,
+        name: item.name,
+        hasPhone: !!item.phone,
+        hasEmail: !!item.email,
+        phoneType: typeof item.phone,
+        emailType: typeof item.email
+      });
+
+      // Check if the data is already decrypted (builder has read permissions)
+      let password = '[Encrypted - Cannot decrypt]';
+      let socials = '[Encrypted - Cannot decrypt]';
+
+      // If phone field exists and is a string (not an object with %share), it might be decrypted
+      if (item.phone && typeof item.phone === 'string') {
+        password = item.phone as string;
+        console.log(`✅ Password appears to be decrypted: ${password.substring(0, 10)}...`);
+      } else if (item.phone && typeof item.phone === 'object' && item.phone !== null && '%share' in item.phone) {
+        password = (item.phone as Record<string, string>)['%share'];
+        console.log(`✅ Password from %share: ${password.substring(0, 10)}...`);
+      }
+
+      // If email field exists and is a string (not an object with %share), it might be decrypted
+      if (item.email && typeof item.email === 'string') {
+        socials = item.email as string;
+        console.log(`✅ Socials appear to be decrypted: ${socials.substring(0, 20)}...`);
+      } else if (item.email && typeof item.email === 'object' && item.email !== null && '%share' in item.email) {
+        socials = (item.email as Record<string, string>)['%share'];
+        console.log(`✅ Socials from %share: ${socials.substring(0, 20)}...`);
+      }
       
       return {
         id: item._id || Math.random().toString(36),
@@ -74,14 +99,14 @@ export async function GET() {
         password: password,
         socials: socials,
         createdAt: item.createdAt || item.timestamp || new Date().toISOString(),
-        txHash: item.txHash || item.metadata?.txHash || '',
-        sequenceNumber: item.sequenceNumber || item.metadata?.sequenceNumber || '',
+        txHash: item.txHash || ((item.metadata as Record<string, string>)?.txHash) || '',
+        sequenceNumber: item.sequenceNumber || ((item.metadata as Record<string, string>)?.sequenceNumber) || '',
         // Include raw data for debugging
         rawData: item
       };
     });
 
-    console.log('📊 Transformed data:', transformedData);
+    console.log('📊 Processed data:', transformedData);
 
     return NextResponse.json({
       success: true,
