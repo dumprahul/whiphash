@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "WhipHash - Secure Password Generator",
+  "version": "1.0.0",
+  "description": "Generate cryptographically secure passwords using Pyth Network entropy",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Open WhipHash"
+  },
+  "permissions": ["tabs"]
+}
