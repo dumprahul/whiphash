@@ -51,9 +51,20 @@ export default function HomePage() {
               borderRadius="12px"
               background="rgba(255, 255, 255, 0.1)"
               className="px-6 py-4 text-xl font-bold"
+              onClick={() => window.location.href = '/test'}
             >
               get started
             </ShimmerButton>
+          </div>
+
+          {/* View Passwords Link */}
+          <div className="mt-6">
+            <button
+              onClick={() => window.location.href = '/view'}
+              className="text-white/60 hover:text-white/90 text-lg underline transition-colors duration-200"
+            >
+              View Saved Passwords →
+            </button>
           </div>
         </div>
       </div>
