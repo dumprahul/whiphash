@@ -73,13 +73,23 @@ class ClientPasswordGenerator {
     ikm.set(deviceSecret, r1.length)
     ikm.set(new TextEncoder().encode(this.context), r1.length + deviceSecret.length)
     
+    console.log('🔗 HKDF Step 3 Parameters:')
+    console.log('🔗 R1 length:', r1.length, 'bytes')
+    console.log('🔗 Device Secret length:', deviceSecret.length, 'bytes')
+    console.log('🔗 Context:', this.context)
+    console.log('🔗 Context length:', this.context.length, 'bytes')
+    console.log('🔗 IKM total length:', ikm.length, 'bytes')
+    console.log('🔗 App Salt1:', this.arrayToBase64(this.appSalt1))
+    console.log('🔗 Info string:', 'local_raw_v1')
+    console.log('🔗 Output length:', 32, 'bytes')
+    
     // HKDF-SHA256( IKM = R1 || C || context, salt = app_salt1, info="local_raw_v1" )
     const localRaw = await this.hkdf(ikm, 32, this.appSalt1, 'local_raw_v1')
     console.log('🔗 Step 3: Generated local_raw (HKDF):', this.arrayToBase64(localRaw))
     return localRaw
   }
 
-  // Step 4: Harden local_raw → LocalKey (Argon2id) - as per genpassword.md
+  // Step 4: Harden local_raw → LocalKey (scrypt) - as per genpassword.md
   private async generateLocalKey(localRaw: Uint8Array): Promise<{
     localKey: Uint8Array
     salt1: Uint8Array
@@ -92,7 +102,16 @@ class ClientPasswordGenerator {
       parallelism: 4
     }
     
-    // LocalKey = Argon2id(local_raw, salt1, mem,time,parallel) (outlen 32)
+    console.log('🛡️ Scrypt Step 4 Parameters:')
+    console.log('🛡️ Input (local_raw) length:', localRaw.length, 'bytes')
+    console.log('🛡️ Salt1 length:', salt1.length, 'bytes')
+    console.log('🛡️ Salt1 value:', this.arrayToBase64(salt1))
+    console.log('🛡️ N (memory-hard parameter):', 16384)
+    console.log('🛡️ r (block size factor):', 8)
+    console.log('🛡️ p (parallelization factor):', 1)
+    console.log('🛡️ Output length:', 32, 'bytes')
+    
+    // LocalKey = scrypt(local_raw, salt1, N, r, p) (outlen 32)
     const localKey = await this.argon2id(localRaw, salt1, argon2Params, 32)
     
     console.log('🛡️ Step 4: Generated LocalKey (scrypt):', this.arrayToBase64(localKey))
@@ -129,16 +148,36 @@ class ClientPasswordGenerator {
     ikm.set(r2, localKey.length)
     ikm.set(new TextEncoder().encode(this.context2), localKey.length + r2.length)
     
+    console.log('🌱 HKDF Step 6a Parameters (seed_raw):')
+    console.log('🌱 LocalKey length:', localKey.length, 'bytes')
+    console.log('🌱 R2 length:', r2.length, 'bytes')
+    console.log('🌱 Context2:', this.context2)
+    console.log('🌱 Context2 length:', this.context2.length, 'bytes')
+    console.log('🌱 IKM total length:', ikm.length, 'bytes')
+    console.log('🌱 App Salt2:', this.arrayToBase64(this.appSalt2))
+    console.log('🌱 Info string:', 'seed_v1')
+    console.log('🌱 Output length:', 32, 'bytes')
+    
     const seedRaw = await this.hkdf(ikm, 32, this.appSalt2, 'seed_v1')
     console.log('🌱 Step 6a: Generated seed_raw:', this.arrayToBase64(seedRaw))
     
-    // password_salt = randomBytes(16); Password_bytes = Argon2id(seed_raw, password_salt, mem,time,parallel)
+    // password_salt = randomBytes(16); Password_bytes = scrypt(seed_raw, password_salt, N, r, p)
     const passwordSalt = crypto.getRandomValues(new Uint8Array(16))
     const argon2Params = {
       memory: 65536, // 64 MB
       time: 3,
       parallelism: 4
     }
+    
+    console.log('🔑 Scrypt Step 6b Parameters (final password):')
+    console.log('🔑 Input (seed_raw) length:', seedRaw.length, 'bytes')
+    console.log('🔑 Password salt length:', passwordSalt.length, 'bytes')
+    console.log('🔑 Password salt value:', this.arrayToBase64(passwordSalt))
+    console.log('🔑 N (memory-hard parameter):', 16384)
+    console.log('🔑 r (block size factor):', 8)
+    console.log('🔑 p (parallelization factor):', 1)
+    console.log('🔑 Output length:', 32, 'bytes')
+    
     const passwordBytes = await this.argon2id(seedRaw, passwordSalt, argon2Params, 32)
     
     console.log('🔑 Step 6b: Generated Password_bytes (scrypt):', this.arrayToBase64(passwordBytes))
@@ -220,29 +259,67 @@ class ClientPasswordGenerator {
 
   // Main password generation function
   async generatePassword(pythRandomness: { n1: string; n2: string; txHash: string; sequenceNumber: string }): Promise<PasswordGenerationResult> {
-    console.log('🚀 Starting password generation process...')
-    console.log('📊 Pyth randomness:', pythRandomness)
+    console.log('🚀 STARTING PASSWORD GENERATION PROCESS...')
+    console.log('📊 Input Pyth Randomness:', pythRandomness)
+    console.log('📊 n1 (BigInt):', BigInt(pythRandomness.n1))
+    console.log('📊 n2 (BigInt):', BigInt(pythRandomness.n2))
+    console.log('📊 txHash:', pythRandomness.txHash)
+    console.log('📊 sequenceNumber:', pythRandomness.sequenceNumber)
     
     // Step 1: Generate device secret (C)
+    console.log('🔐 STEP 1: Generating device secret (C)...')
     const deviceSecret = this.generateDeviceSecret()
+    console.log('🔐 Device Secret (C) generated:', this.arrayToBase64(deviceSecret))
     
     // Step 2: Extract R1 from Pyth randomness
+    console.log('🎲 STEP 2: Extracting R1 from Pyth randomness...')
     const r1 = this.extractR1(pythRandomness)
+    console.log('🎲 R1 extracted:', this.arrayToBase64(r1))
     
     // Step 3: Mix R1 + C → local_raw (HKDF)
+    console.log('🔗 STEP 3: Mixing R1 + C → local_raw (HKDF)...')
+    console.log('🔗 HKDF Parameters:')
+    console.log('🔗 - IKM = R1 || C || context')
+    console.log('🔗 - Salt = app_salt1')
+    console.log('🔗 - Info = "local_raw_v1"')
+    console.log('🔗 - Length = 32 bytes')
     const localRaw = await this.generateLocalRaw(r1, deviceSecret)
+    console.log('🔗 Local Raw generated:', this.arrayToBase64(localRaw))
     
-    // Step 4: Harden local_raw → LocalKey (PBKDF2)
+    // Step 4: Harden local_raw → LocalKey (scrypt)
+    console.log('🛡️ STEP 4: Hardening local_raw → LocalKey (scrypt)...')
+    console.log('🛡️ Scrypt Parameters:')
+    console.log('🛡️ - N = 16384 (memory-hard parameter)')
+    console.log('🛡️ - r = 8 (block size factor)')
+    console.log('🛡️ - p = 1 (parallelization factor)')
+    console.log('🛡️ - Output length = 32 bytes')
     const { localKey, salt1, argon2Params } = await this.generateLocalKey(localRaw)
+    console.log('🛡️ LocalKey generated:', this.arrayToBase64(localKey))
+    console.log('🛡️ Salt1 generated:', this.arrayToBase64(salt1))
     
     // Step 5: Extract R2 from Pyth randomness
+    console.log('🎲 STEP 5: Extracting R2 from Pyth randomness...')
     const r2 = this.extractR2(pythRandomness)
+    console.log('🎲 R2 extracted:', this.arrayToBase64(r2))
     
     // Step 6: Derive seed and final harden → Password_bytes
+    console.log('🌱 STEP 6: Deriving seed and final hardening → Password_bytes...')
+    console.log('🌱 HKDF Parameters for seed_raw:')
+    console.log('🌱 - IKM = LocalKey || R2 || context2')
+    console.log('🌱 - Salt = app_salt2')
+    console.log('🌱 - Info = "seed_v1"')
+    console.log('🌱 - Length = 32 bytes')
+    console.log('🌱 Scrypt Parameters for final password:')
+    console.log('🌱 - N = 16384, r = 8, p = 1')
+    console.log('🌱 - Output length = 32 bytes')
     const { passwordBytes, passwordSalt } = await this.generatePasswordBytes(localKey, r2)
+    console.log('🌱 Password bytes generated:', this.arrayToBase64(passwordBytes))
+    console.log('🌱 Password salt generated:', this.arrayToBase64(passwordSalt))
     
     // Convert to human-readable password
+    console.log('🎯 Converting password bytes to human-readable password...')
     const password = this.convertToPassword(passwordBytes)
+    console.log('🎯 Final password:', password)
     
     const result: PasswordGenerationResult = {
       password,
@@ -262,7 +339,8 @@ class ClientPasswordGenerator {
       }
     }
     
-    console.log('✅ Password generation completed!')
+    console.log('✅ PASSWORD GENERATION COMPLETED!')
+    console.log('✅ Final Result:', result)
     return result
   }
 
@@ -398,6 +476,11 @@ export default function TestPage() {
     setResult(null)
     setSequenceNumber(null)
     setTxHash(null)
+    setPasswordResult(null)
+    setIsPolling(false)
+    setIsGeneratingPassword(false)
+    setIsStoringPassword(false)
+    setStorageSuccess(false)
 
     try {
       // Send transaction using window.ethereum directly
@@ -426,27 +509,28 @@ export default function TestPage() {
         eventName: 'Requested'
       })
 
+      console.log('📋 CONTRACT TRANSACTION DATA:')
+      console.log('📋 Transaction Hash:', txHash)
+      console.log('📋 Transaction Receipt:', receipt)
+      console.log('📋 All Receipt Logs:', receipt.logs)
+      console.log('📋 Parsed Request Events:', requestEvents)
 
       if (requestEvents.length > 0) {
         const seqNum = requestEvents[0].args.sequenceNumber.toString()
         setSequenceNumber(seqNum)
         
-        // Generate password immediately using transaction hash as entropy
-        // This provides immediate feedback while waiting for Pyth to fulfill
-        const txHashBigInt = BigInt(txHash)
-        const immediateRandomnessResult = {
-          n1: (txHashBigInt >> BigInt(128)).toString(), // Use first half of tx hash
-          n2: (txHashBigInt & (BigInt(1) << BigInt(128) - BigInt(1))).toString(), // Use second half of tx hash
-          fulfilled: true, // Mark as fulfilled for immediate generation
-          requester: account
-        }
+        console.log('📋 Contract Event Data:')
+        console.log('📋 Sequence Number:', seqNum)
+        console.log('📋 Requester:', requestEvents[0].args.requester)
+        console.log('📋 Event Args:', requestEvents[0].args)
         
-        // Generate password immediately with transaction-based entropy
-        console.log('🚀 Generating immediate password with transaction entropy...')
-        generatePassword(immediateRandomnessResult, txHash, seqNum)
+        console.log('⏳ Waiting for Pyth randomness to be fulfilled...')
+        console.log('⏳ Starting polling for real Pyth randomness...')
         
-        // Start polling for real Pyth randomness
-        startPolling(seqNum)
+        // Wait a moment for transaction to be fully processed, then check immediately
+        setTimeout(() => {
+          checkRandomnessImmediately(seqNum, txHash)
+        }, 1000) // Wait 1 second before checking
       } else {
         setError('Could not find sequence number in transaction')
       }
@@ -459,12 +543,80 @@ export default function TestPage() {
     }
   }
 
-  const startPolling = (seqNum: string) => {
+  const checkRandomnessImmediately = async (seqNum: string, txHash: string) => {
+    console.log('🚀 Checking randomness immediately for sequence:', seqNum)
+    
+    try {
+      if (!publicClient) {
+        console.error('❌ Public client not available')
+        return
+      }
+      
+      const result = await publicClient.readContract({
+        address: RANDOMNESS_CONTRACT as `0x${string}`,
+        abi: RANDOMNESS_ABI,
+        functionName: 'getResult',
+        args: [BigInt(seqNum)]
+      })
+      
+      console.log('🚀 Immediate check result:', result)
+      console.log('🚀 Fulfilled status:', result[2])
+      
+      if (result[2]) {
+        const randomnessResult = {
+          n1: result[0].toString(),
+          n2: result[1].toString(),
+          fulfilled: result[2],
+          requester: result[3]
+        }
+        
+        console.log('🎉 RANDOMNESS ALREADY FULFILLED IMMEDIATELY!')
+        console.log('🎉 n1:', randomnessResult.n1)
+        console.log('🎉 n2:', randomnessResult.n2)
+        console.log('🎉 Full randomnessResult:', randomnessResult)
+        
+        setResult(randomnessResult)
+        setIsPolling(false)
+        
+        // Generate password immediately
+        console.log('🚀 Generating password with IMMEDIATE Pyth randomness...')
+        console.log('🚀 About to call generatePassword with:', randomnessResult)
+        
+        try {
+          await generatePassword(randomnessResult, txHash, seqNum)
+          console.log('✅ generatePassword completed successfully!')
+        } catch (error) {
+          console.error('❌ Error in generatePassword:', error)
+        }
+      } else {
+        console.log('⏳ Randomness not ready yet, starting polling...')
+        startPolling(seqNum, txHash)
+      }
+    } catch (err) {
+      console.error('❌ Error in immediate check:', err)
+      console.log('⏳ Starting polling as fallback...')
+      startPolling(seqNum, txHash)
+    }
+  }
+
+  const startPolling = (seqNum: string, txHash: string) => {
     setIsPolling(true)
+    let pollCount = 0
+    const maxPolls = 60 // Poll for up to 60 seconds (60 * 1 second)
+    
+    console.log('🔄 Starting polling for sequence number:', seqNum)
+    console.log('🔄 Transaction hash:', txHash)
+    console.log('🔄 Will poll every 1 second for up to 60 seconds')
     
     const pollInterval = setInterval(async () => {
       try {
-        if (!publicClient) return
+        pollCount++
+        console.log(`🔄 Polling attempt ${pollCount}/${maxPolls} for sequence ${seqNum}`)
+        
+        if (!publicClient) {
+          console.error('❌ Public client not available')
+          return
+        }
         
         const result = await publicClient.readContract({
           address: RANDOMNESS_CONTRACT as `0x${string}`,
@@ -473,6 +625,9 @@ export default function TestPage() {
           args: [BigInt(seqNum)]
         })
         
+        console.log(`🔄 Poll ${pollCount} result:`, result)
+        console.log(`🔄 Fulfilled status:`, result[2])
+        
         if (result[2]) { // result[2] is the fulfilled boolean
           const randomnessResult = {
             n1: result[0].toString(), // result[0] is n1
@@ -480,18 +635,51 @@ export default function TestPage() {
             fulfilled: result[2],     // result[2] is fulfilled
             requester: result[3]     // result[3] is requester
           }
+          
+          console.log('📋 PYTH RANDOMNESS CONTRACT DATA:')
+          console.log('📋 Raw Contract Result:', result)
+          console.log('📋 n1 (raw):', result[0])
+          console.log('📋 n2 (raw):', result[1])
+          console.log('📋 fulfilled (raw):', result[2])
+          console.log('📋 requester (raw):', result[3])
+          console.log('📋 Processed Randomness Result:', randomnessResult)
+          
+          console.log('✅ PYTH RANDOMNESS IS NOW FULFILLED!')
+          console.log('✅ n1:', randomnessResult.n1)
+          console.log('✅ n2:', randomnessResult.n2)
+          console.log('✅ fulfilled:', randomnessResult.fulfilled)
+          console.log('✅ requester:', randomnessResult.requester)
+          console.log('✅ Full randomnessResult:', randomnessResult)
+          
           setResult(randomnessResult)
           setIsPolling(false)
           clearInterval(pollInterval)
           
-          // Regenerate password with real Pyth randomness
-          console.log('🔄 Regenerating password with verified Pyth randomness...')
-          generatePassword(randomnessResult)
+          // Generate password ONLY with real Pyth randomness
+          console.log('🚀 Generating password with REAL Pyth randomness...')
+          console.log('🚀 About to call generatePassword with:', randomnessResult)
+          
+          try {
+            await generatePassword(randomnessResult, txHash, seqNum)
+            console.log('✅ generatePassword completed successfully!')
+          } catch (error) {
+            console.error('❌ Error in generatePassword:', error)
+          }
+        } else if (pollCount >= maxPolls) {
+          console.error('❌ Polling timeout reached. Pyth randomness not fulfilled.')
+          setIsPolling(false)
+          clearInterval(pollInterval)
+          setError('Timeout waiting for Pyth randomness. Please try again.')
         }
       } catch (err) {
-        console.error('Error polling result:', err)
+        console.error('❌ Error polling result:', err)
+        if (pollCount >= maxPolls) {
+          setIsPolling(false)
+          clearInterval(pollInterval)
+          setError('Error polling for randomness. Please try again.')
+        }
       }
-    }, 2000) // Poll every 2 seconds
+    }, 1000) // Poll every 1 second
   }
 
   const generatePassword = async (
@@ -507,16 +695,35 @@ export default function TestPage() {
     const currentTxHash = txHashParam || txHash
     const currentSequenceNumber = sequenceNumberParam || sequenceNumber
     
+    console.log('🔐 ===== GENERATE PASSWORD FUNCTION CALLED =====')
+    console.log('🔐 PASSWORD GENERATION INPUT PARAMETERS:')
+    console.log('🔐 randomnessResult:', randomnessResult)
+    console.log('🔐 txHashParam:', txHashParam)
+    console.log('🔐 sequenceNumberParam:', sequenceNumberParam)
+    console.log('🔐 currentTxHash:', currentTxHash)
+    console.log('🔐 currentSequenceNumber:', currentSequenceNumber)
+    console.log('🔐 isGeneratingPassword:', isGeneratingPassword)
+    
     if (!currentTxHash || !currentSequenceNumber) {
-      console.error('Missing transaction hash or sequence number')
+      console.error('❌ Missing transaction hash or sequence number')
+      console.error('❌ currentTxHash:', currentTxHash)
+      console.error('❌ currentSequenceNumber:', currentSequenceNumber)
       return
     }
 
+    if (isGeneratingPassword) {
+      console.log('⚠️ Password generation already in progress, skipping...')
+      console.log('⚠️ This might be why password is not generated on first attempt!')
+      return
+    }
+
+    console.log('🔐 Starting password generation process...')
     setIsGeneratingPassword(true)
     setPasswordResult(null)
 
     try {
-      console.log('🔐 Starting client-side password generation with Pyth randomness...')
+      console.log('🔐 Starting client-side password generation with REAL Pyth randomness...')
+      console.log('🔐 Using ONLY onchain randomness data from contract...')
       
       const pythRandomness = {
         n1: randomnessResult.n1,
@@ -525,14 +732,27 @@ export default function TestPage() {
         sequenceNumber: currentSequenceNumber
       }
 
+      console.log('🔐 REAL PYTH RANDOMNESS FOR PASSWORD GENERATION:')
+      console.log('🔐 pythRandomness:', pythRandomness)
+      console.log('🔐 n1 (onchain):', pythRandomness.n1)
+      console.log('🔐 n2 (onchain):', pythRandomness.n2)
+      console.log('🔐 txHash:', pythRandomness.txHash)
+      console.log('🔐 sequenceNumber:', pythRandomness.sequenceNumber)
+      console.log('🔐 These are the ACTUAL random numbers from Pyth Network!')
+      console.log('🔐 About to call passwordGenerator.generatePassword...')
+
       // Generate password client-side using Web Crypto API
       const passwordResult = await passwordGenerator.generatePassword(pythRandomness)
+      console.log('🔐 passwordGenerator.generatePassword completed!')
       setPasswordResult(passwordResult)
       
       console.log('✅ Client-side password generation completed!')
+      console.log('✅ Final Password Result:', passwordResult)
       
       // Store password in NilDB after successful generation
+      console.log('💾 Starting NilDB storage...')
       await storePasswordInNilDB(passwordResult)
+      console.log('💾 NilDB storage completed!')
       
     } catch (err) {
       console.error('Error generating password:', err)
@@ -710,7 +930,7 @@ export default function TestPage() {
               {sequenceNumber && (
                 <p className="text-yellow-700">Sequence Number: {sequenceNumber}</p>
               )}
-              <p className="text-sm text-yellow-600">Waiting for randomness generation...</p>
+              <p className="text-sm text-yellow-600">Waiting for Pyth Network to fulfill randomness...</p>
             </div>
           )}
 
