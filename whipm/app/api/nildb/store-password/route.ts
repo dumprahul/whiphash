@@ -31,7 +31,7 @@ if (!config.BUILDER_PRIVATE_KEY) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { password, name, metadata } = await request.json();
+    const { password, name, metadata, socials } = await request.json();
 
     // Check all required environment variables
     const missingVars = [];
@@ -68,11 +68,20 @@ export async function POST(request: NextRequest) {
       hasAuthUrl: !!config.NILAUTH_URL,
       nodeCount: config.NILDB_NODES.length
     });
+    console.log('📝 Received data:', {
+      passwordLength: password?.length || 0,
+      name: name,
+      socialsLength: socials?.length || 0,
+      socials: socials,
+      hasMetadata: !!metadata
+    });
 
     // Step 1: Create keypairs for builder and user (same as demo.js)
     let builderKeypair;
     try {
+      console.log('🔑 Creating builder keypair...');
       builderKeypair = Keypair.from(config.BUILDER_PRIVATE_KEY!);
+      console.log('✅ Builder keypair created successfully');
     } catch (keypairError) {
       console.error('❌ Failed to create builder keypair:', keypairError);
       return NextResponse.json(
@@ -81,7 +90,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    console.log('👤 Creating user keypair...');
     const userKeypair = Keypair.generate();
+    console.log('✅ User keypair created successfully');
 
     const builderDid = builderKeypair.toDid().toString();
     const userDid = userKeypair.toDid().toString();
@@ -96,6 +107,7 @@ export async function POST(request: NextRequest) {
     //   .build();
 
     // Step 3: Create builder client (same as demo.js)
+    console.log('🏗️ Creating builder client...');
     const builder = await SecretVaultBuilderClient.from({
       keypair: builderKeypair,
       urls: {
@@ -104,9 +116,12 @@ export async function POST(request: NextRequest) {
         dbs: config.NILDB_NODES,
       },
     });
+    console.log('✅ Builder client created successfully');
 
     // Refresh token using existing subscription
+    console.log('🔄 Refreshing root token...');
     await builder.refreshRootToken();
+    console.log('✅ Root token refreshed successfully');
 
     // Step 4: Register builder (same as demo.js)
     try {
@@ -145,7 +160,7 @@ export async function POST(request: NextRequest) {
           properties: {
             _id: { type: 'string', format: 'uuid' },
             name: { type: 'string' }, // name will not be secret shared
-            email: { // email will be secret shared
+            email: { // email will be secret shared (we'll store socials here)
               type: "object",
               properties: {
                 "%share": {
@@ -186,6 +201,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 7: Create user client (same as demo.js)
+    console.log('👤 Creating user client...');
     const user = await SecretVaultUserClient.from({
       baseUrls: config.NILDB_NODES,
       keypair: userKeypair,
@@ -193,13 +209,16 @@ export async function POST(request: NextRequest) {
         operation: 'store',
       },
     });
+    console.log('✅ User client created successfully');
 
     // Step 8: Builder grants write access to the user (same as demo.js)
+    console.log('🔐 Creating delegation token...');
     const delegation = NucTokenBuilder.extending(builder.rootToken)
       .command(new Command(['nil', 'db', 'data', 'create']))
       .audience(userKeypair.toDid())
       .expiresAt(Math.floor(Date.now() / 1000) + 3600) // 1 hour
       .build(builderKeypair.privateKey());
+    console.log('✅ Delegation token created successfully');
 
     // Step 9: User's private data (exact same format as demo.js)
     // %allot indicates that the client should encrypt this data
@@ -207,14 +226,22 @@ export async function POST(request: NextRequest) {
       _id: randomUUID(),
       name: name || `WhipHash Password - ${new Date().toLocaleString()}`,
       email: {
-        '%allot': JSON.stringify(metadata), // Store metadata in email field
+        '%allot': socials || 'No socials provided', // Store user's socials input in email field
       },
       phone: {
         '%allot': password, // Store password in phone field
       },
     };
 
+    console.log('📦 Final data structure:', {
+      _id: userPrivateData._id,
+      name: userPrivateData.name,
+      emailLength: userPrivateData.email['%allot']?.length || 0,
+      phoneLength: userPrivateData.phone['%allot']?.length || 0,
+    });
+
     // Step 10: User uploads data and grants builder limited access (same as demo.js)
+    console.log('📤 Uploading data to NilDB...');
     const uploadResults = await user.createData(delegation, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       owner: userDid as any,
@@ -229,6 +256,7 @@ export async function POST(request: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: [userPrivateData as any],
     });
+    console.log('✅ Data uploaded successfully to', Object.keys(uploadResults).length, 'nodes');
 
     console.log('✅ User uploaded private password data with builder access granted');
 
@@ -248,16 +276,35 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Failed to store password in NilDB:', error);
+    console.error('❌ Error type:', typeof error);
+    console.error('❌ Error constructor:', error?.constructor?.name);
+    console.error('❌ Error string:', String(error));
     
     let errorMessage = 'Failed to store password in NilDB';
+    let errorDetails = 'Unknown error';
+
     if (error instanceof Error) {
       errorMessage = error.message;
+      errorDetails = error.stack || error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+      errorDetails = error;
+    } else if (error && typeof error === 'object') {
+      try {
+        errorMessage = (error as { message?: string }).message || 'Object error';
+        errorDetails = JSON.stringify(error, null, 2);
+      } catch {
+        errorMessage = 'Object error (could not stringify)';
+        errorDetails = String(error);
+      }
     }
-    
+
+    console.error('❌ Processed error details:', { errorMessage, errorDetails });
+
     return NextResponse.json(
-      { 
+      {
         error: errorMessage,
-        details: error instanceof Error ? error.stack : 'Unknown error',
+        details: errorDetails,
         timestamp: new Date().toISOString()
       },
       { status: 500 }

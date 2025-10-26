@@ -395,6 +395,8 @@ export default function TestPage() {
   const [passwordGenerator] = useState(() => new ClientPasswordGenerator())
   const [isStoringPassword, setIsStoringPassword] = useState(false)
   const [storageSuccess, setStorageSuccess] = useState(false)
+  const [socials, setSocials] = useState('')
+  const [showSocialsInput, setShowSocialsInput] = useState(false)
 
   // Initialize Viem client
   useEffect(() => {
@@ -481,6 +483,8 @@ export default function TestPage() {
     setIsGeneratingPassword(false)
     setIsStoringPassword(false)
     setStorageSuccess(false)
+    setSocials('')
+    setShowSocialsInput(false)
 
     try {
       // Send transaction using window.ethereum directly
@@ -749,10 +753,9 @@ export default function TestPage() {
       console.log('✅ Client-side password generation completed!')
       console.log('✅ Final Password Result:', passwordResult)
       
-      // Store password in NilDB after successful generation
-      console.log('💾 Starting NilDB storage...')
-      await storePasswordInNilDB(passwordResult)
-      console.log('💾 NilDB storage completed!')
+      // Show socials input after password generation
+      setShowSocialsInput(true)
+      console.log('📝 Password generated! Please enter socials to store in NilDB.')
       
     } catch (err) {
       console.error('Error generating password:', err)
@@ -762,12 +765,23 @@ export default function TestPage() {
     }
   }
 
-  const storePasswordInNilDB = async (passwordResult: PasswordGenerationResult) => {
+  const storePasswordWithSocials = async () => {
+    if (!passwordResult) {
+      setError('No password generated yet')
+      return
+    }
+
+    if (!socials.trim()) {
+      setError('Please enter socials information')
+      return
+    }
+
     setIsStoringPassword(true)
     setStorageSuccess(false)
     
     try {
-      console.log('💾 Storing password in NilDB...')
+      console.log('💾 Storing password with socials in NilDB...')
+      console.log('💾 Socials:', socials)
       
       // First test configuration
       console.log('🔍 Testing NilDB configuration...')
@@ -794,6 +808,7 @@ export default function TestPage() {
           password: passwordResult.password,
           name: passwordName,
           metadata: passwordResult.metadata,
+          socials: socials,
           txHash: passwordResult.metadata.txHash,
           sequenceNumber: passwordResult.metadata.sequenceNumber
         })
@@ -802,7 +817,8 @@ export default function TestPage() {
       if (response.ok) {
         const result = await response.json()
         setStorageSuccess(true)
-        console.log('✅ Password successfully stored in NilDB!', result)
+        setShowSocialsInput(false)
+        console.log('✅ Password and socials successfully stored in NilDB!', result)
       } else {
         let error
         try {
@@ -833,6 +849,7 @@ export default function TestPage() {
       setIsStoringPassword(false)
     }
   }
+
 
   const formatNumber = (num: string, format: string) => {
     const bigNum = BigInt(num)
@@ -1060,6 +1077,36 @@ export default function TestPage() {
                     Copy Password
                   </button>
                 </div>
+
+                {/* Socials Input */}
+                {showSocialsInput && (
+                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 className="font-semibold text-blue-800 mb-3">📝 Enter Socials Information</h4>
+                    <p className="text-blue-700 mb-3">Please enter socials information to store with your password in NilDB:</p>
+                    <textarea
+                      value={socials}
+                      onChange={(e) => setSocials(e.target.value)}
+                      placeholder="Enter socials information (e.g., website, platform, account details, etc.)"
+                      className="w-full p-3 border border-gray-300 rounded-lg mb-3 text-black"
+                      rows={3}
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={storePasswordWithSocials}
+                        disabled={isStoringPassword || !socials.trim()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      >
+                        {isStoringPassword ? 'Storing...' : 'Store Password & Socials'}
+                      </button>
+                      <button
+                        onClick={() => setShowSocialsInput(false)}
+                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                      >
+                        Skip Storage
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Cryptographic Metadata */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
