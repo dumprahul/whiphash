@@ -5,6 +5,7 @@ import { createPublicClient, http, parseAbi, parseEventLogs } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import Dither from '../../components/Dither'
 import { ShimmerButton } from '../../components/ui/shimmer-button'
+import { ShineBorder } from '../../components/ui/shine-border'
 
 interface PasswordGenerationResult {
   password: string
@@ -955,58 +956,70 @@ export default function TestPage() {
           )}
 
           {passwordResult && (
-            <div className="mt-8 space-y-4">
-              {/* Password Display */}
-              <div className="p-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg">
-                <h3 className="text-xl font-semibold text-white mb-4">🔐 Secure Password Generated!</h3>
-                <div className="bg-black/20 p-3 rounded border border-white/10">
-                  <code className="text-lg font-mono break-all text-white">{passwordResult.password}</code>
-                </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(passwordResult.password)}
-                  className="mt-3 px-4 py-2 bg-white/20 text-white text-sm rounded hover:bg-white/30 backdrop-blur-sm"
-                >
-                  Copy Password
-                </button>
-              </div>
-
-              {/* Socials Input */}
-              {showSocialsInput && (
-                <div className="p-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg">
-                  <h4 className="font-semibold text-white mb-3">📝 Enter Socials Information</h4>
-                  <p className="text-white/80 mb-3">Please enter socials information to store with your password in NilDB:</p>
-                  <textarea
-                    value={socials}
-                    onChange={(e) => setSocials(e.target.value)}
-                    placeholder="Enter socials information (e.g., website, platform, account details, etc.)"
-                    className="w-full p-3 border border-white/30 rounded-lg mb-3 text-black bg-white/90"
-                    rows={3}
-                  />
-                  <div className="flex gap-3">
+            <div className="mt-8">
+              {/* Password Display with ShineBorder */}
+              <div className="relative p-8 bg-black/20 backdrop-blur-sm rounded-2xl">
+                <ShineBorder
+                  borderWidth={2}
+                  duration={8}
+                  shineColor={["#ffffff", "#60a5fa", "#ffffff"]}
+                  className="rounded-2xl"
+                />
+                
+                <div className="relative z-10">
+                  <h3 className="text-2xl font-bold text-white mb-6 text-center">🔐 Secure Password Generated!</h3>
+                  
+                  {/* Generated Password */}
+                  <div className="mb-6">
+                    <div className="bg-black/40 p-4 rounded-xl border border-white/20">
+                      <code className="text-xl font-mono break-all text-white">{passwordResult.password}</code>
+                    </div>
                     <button
-                      onClick={storePasswordWithSocials}
-                      disabled={isStoringPassword || !socials.trim()}
-                      className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm"
+                      onClick={() => navigator.clipboard.writeText(passwordResult.password)}
+                      className="mt-3 w-full px-4 py-2 bg-white/20 text-white text-sm rounded-lg hover:bg-white/30 backdrop-blur-sm transition-all duration-200"
                     >
-                      {isStoringPassword ? 'Storing...' : 'Store Password & Socials'}
-                    </button>
-                    <button
-                      onClick={() => setShowSocialsInput(false)}
-                      className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 backdrop-blur-sm"
-                    >
-                      Skip Storage
+                      Copy Password
                     </button>
                   </div>
-                </div>
-              )}
 
-              {/* Success Message */}
-              {storageSuccess && (
-                <div className="p-6 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-lg">
-                  <h3 className="font-semibold text-green-200 mb-2">✅ Password Stored Successfully!</h3>
-                  <p className="text-green-200">Your password has been securely stored in NilDB.</p>
+                  {/* Socials Input */}
+                  {showSocialsInput && (
+                    <div className="space-y-4">
+                      <h4 className="font-semibold text-white text-lg">📝 Enter Your Socials</h4>
+                      <textarea
+                        value={socials}
+                        onChange={(e) => setSocials(e.target.value)}
+                        placeholder="Enter socials information (e.g., website, platform, account details, etc.)"
+                        className="w-full p-4 border border-white/30 rounded-xl text-black bg-white/90 placeholder-gray-500 resize-none"
+                        rows={3}
+                      />
+                      <div className="flex gap-3">
+                        <button
+                          onClick={storePasswordWithSocials}
+                          disabled={isStoringPassword || !socials.trim()}
+                          className="flex-1 px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm transition-all duration-200 font-medium"
+                        >
+                          {isStoringPassword ? 'Saving...' : 'Save Password'}
+                        </button>
+                        <button
+                          onClick={() => setShowSocialsInput(false)}
+                          className="px-6 py-3 bg-white/10 text-white rounded-xl hover:bg-white/20 backdrop-blur-sm transition-all duration-200"
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Success Message */}
+                  {storageSuccess && (
+                    <div className="mt-6 p-4 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-xl">
+                      <h3 className="font-semibold text-green-200 mb-1">✅ Password Saved Successfully!</h3>
+                      <p className="text-green-200 text-sm">Your password has been securely stored in NilDB.</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
